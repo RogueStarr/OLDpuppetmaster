@@ -1,0 +1,128 @@
+root@server:~# yq cluster.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: "none"
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Hubble relay
+      - containerPort: 31234
+        hostPort: 31234
+      # Hubble UI
+      - containerPort: 31235
+        hostPort: 31235
+  - role: worker
+  - role: worker
+root@server:~# cilium install \
+  --set kubeProxyReplacement="strict" \
+  --set k8sServiceHost="kind-control-plane" \
+  --set k8sServicePort=6443 \
+  --set l2announcements.enabled=true \
+  --set l2announcements.leaseDuration="3s" \
+  --set l2announcements.leaseRenewDeadline="1s" \
+  --set l2announcements.leaseRetryPeriod="500ms" \
+  --set devices="{eth0,net0}" \
+  --set externalIPs.enabled=true \
+  --set operator.replicas=2
+🔮 Auto-detected Kubernetes kind: kind
+✨ Running "kind" validation checks
+✅ Detected kind version "0.20.0"
+ℹ️  Using Cilium version 1.14.1
+🔮 Auto-detected cluster name: kind-kind
+ℹ️  Detecting real Kubernetes API server addr and port on Kind
+🔮 Auto-detected kube-proxy has not been installed
+ℹ️  Cilium will fully replace all functionalities of kube-proxy
+root@server:~# cilium hubble enable --ui
+root@server:~# cilium status --wait
+    /¯¯\
+ /¯¯\__/¯¯\    Cilium:             OK
+ \__/¯¯\__/    Operator:           OK
+ /¯¯\__/¯¯\    Envoy DaemonSet:    disabled (using embedded mode)
+ \__/¯¯\__/    Hubble Relay:       OK
+    \__/       ClusterMesh:        disabled
+
+Deployment             hubble-ui          Desired: 1, Ready: 1/1, Available: 1/1
+Deployment             cilium-operator    Desired: 2, Ready: 2/2, Available: 2/2
+Deployment             hubble-relay       Desired: 1, Ready: 1/1, Available: 1/1
+DaemonSet              cilium             Desired: 3, Ready: 3/3, Available: 3/3
+Containers:            cilium             Running: 3
+                       hubble-ui          Running: 1
+                       cilium-operator    Running: 2
+                       hubble-relay       Running: 1
+Cluster Pods:          5/5 managed by Cilium
+Helm chart version:    1.14.1
+Image versions         cilium             quay.io/cilium/cilium:v1.14.1@sha256:edc1d05ea1365c4a8f6ac6982247d5c145181704894bb698619c3827b6963a72: 3
+                       hubble-ui          quay.io/cilium/hubble-ui:v0.12.0@sha256:1c876cfa1d5e35bc91e1025c9314f922041592a88b03313c22c1f97a5d2ba88f: 1
+                       hubble-ui          quay.io/cilium/hubble-ui-backend:v0.12.0@sha256:8a79a1aad4fc9c2aa2b3e4379af0af872a89fcec9d99e117188190671c66fc2e: 1
+                       cilium-operator    quay.io/cilium/operator-generic:v1.14.1@sha256:e061de0a930534c7e3f8feda8330976367971238ccafff42659f104effd4b5f7: 2
+                       hubble-relay       quay.io/cilium/hubble-relay:v1.14.1@sha256:db30e85a7abc10589ce2a97d61ee18696a03dc5ea04d44b4d836d88bd75b59d8: 1
+
+root@server:~# cilium config view | grep l2
+enable-l2-announcements                           true
+enable-l2-neigh-discovery                         true
+l2-announcements-lease-duration                   3s
+l2-announcements-renew-deadline                   1s
+l2-announcements-retry-period                     500ms
+
+root@server:~# kubectl apply -f deathstar.yaml
+service/deathstar created
+deployment.apps/deathstar created
+root@server:~# kubectl rollout status deployment deathstar
+Waiting for deployment "deathstar" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "deathstar" rollout to finish: 1 of 2 updated replicas are available...
+deployment "deathstar" successfully rolled out
+root@server:~# kubectl get svc deathstar --show-labels
+NAME        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE   LABELS
+deathstar   ClusterIP   10.96.137.209   <none>        80/TCP    6s    color=red
+root@server:~# SVC_IP=12.0.0.100
+kubectl patch service deathstar -p '{"spec":{"externalIPs":["'$SVC_IP'"]}}'
+service/deathstar patched
+root@server:~# kubectl get svc deathstar
+NAME        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+deathstar   ClusterIP   10.96.137.209   12.0.0.100    80/TCP    13s
+root@server:~# yq l2policy.yaml
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: policy1
+spec:
+  externalIPs: true
+  loadBalancerIPs: false
+  interfaces:
+    - net0
+  serviceSelector:
+    matchLabels:
+      color: blue
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+root@server:~# kubectl apply -f l2policy.yaml
+ciliuml2announcementpolicy.cilium.io/policy1 created
+root@server:~# docker exec -e SVC_IP=$SVC_IP -ti clab-garp-demo-neighbor bash
+root@neighbor:/# curl --connect-timeout 1 http://$SVC_IP/v1/
+curl: (28) Connection timed out after 1001 milliseconds
+root@neighbor:/# curl --connect-timeout 1 http://$SVC_IP/v1/
+{
+        "name": "Death Star",
+        "hostname": "deathstar-74b7456d75-cgdbq",
+        "model": "DS-1 Orbital Battle Station",
+        "manufacturer": "Imperial Department of Military Research, Sienar Fleet Systems",
+        "cost_in_credits": "1000000000000",
+        "length": "120000",
+        "crew": "342953",
+        "passengers": "843342",
+        "cargo_capacity": "1000000000000",
+        "hyperdrive_rating": "4.0",
+        "starship_class": "Deep Space Mobile Battlestation",
+        "api": [
+                "GET   /v1",
+                "GET   /v1/healthz",
+                "POST  /v1/request-landing",
+                "PUT   /v1/cargobay",
+                "GET   /v1/hyper-matter-reactor/status",
+                "PUT   /v1/exhaust-port"
+        ]
+}

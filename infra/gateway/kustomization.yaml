@@ -7,5 +7,5 @@ resources:
   - ns.yaml
   - cloudflare-api-token.yaml
   - cloudflare-issuer.yaml
-  - gw-stonegarden.yaml
-  - gw-proxmox-euclid.yaml
+  - gw-puppetmaster.yaml
+  - cloudflare-cert.yaml

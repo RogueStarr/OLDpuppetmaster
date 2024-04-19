@@ -1,3 +1,4 @@
+#cloudflare-issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
@@ -6,7 +7,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: veghag@gmail.com
+    email: rogue@roguestarr.com
     privateKeySecretRef:
       name: cloudflare-key
     solvers:
@@ -14,4 +15,4 @@ spec:
           cloudflare:
             apiTokenSecretRef:
               name: cloudflare-api-token
-              key: api-token
+              key: cloudflare-token  # Corrected key here

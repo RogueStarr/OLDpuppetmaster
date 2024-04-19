@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-roguestarr-com
+  namespace: gateway
+spec:
+  secretName: wildcard-roguestarr-com-tls
+  dnsNames:
+    - "roguestarr.com"
+    - "*.roguestarr.com"
+  issuerRef:
+    name: cloudflare-issuer
+    kind: Issuer
